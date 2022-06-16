@@ -2,27 +2,29 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
+import os
 from Extended_data_visual import N_E, N_CV, N_T, T, T_test
 from visual_supplementary import create_dataset, visualize_similarity, y_size
 from Extended_data_visual import DataLoader_GPU
 import numpy as np
+import json
 
 def train_conv(encoder, decoder, train_loader, val_loader, loss_fn, optimizer, num_epochs,flag_only_encoder):
     # Set train mode for both the encoder and the decoder
-    encoder.train()
-    decoder.train()
     train_loss_epoch=[]
     val_loss_epoch = []
     # Iterate the dataloader (we do not need the label values, this is unsupervised learning)
     for epoch in range(num_epochs):
         train_loss = []
+        encoder.train()
+        decoder.train()
         for k,batch in enumerate(train_loader):  # with "_" we just ignore the labels (the second element of the dataloader tuple)
             if flag_only_encoder:
-                image_batch=batch[0]
-                targets_batch=batch[1]
+                image_batch = batch[0]
+                targets_batch = batch[1].reshape(-1,1)
             else:
-                image_batch=batch[0]
-                targets_batch=batch[0]
+                image_batch = batch[0]
+                targets_batch = batch[0]
             if(image_batch.shape[0]==256):
                 encoded_data = encoder(image_batch.reshape(256,1,24,24)/255)
                 if flag_only_encoder:
@@ -39,11 +41,40 @@ def train_conv(encoder, decoder, train_loader, val_loader, loss_fn, optimizer, n
                 optimizer.step()
                 # Print batch loss
                 train_loss.append(loss.detach().cpu().numpy())
-        train_loss_epoch.append(np.mean(train_loss))
+        train_loss_epoch.append(np.mean(train_loss).item())
         epoch_val_loss=test_epoch(encoder, decoder, val_loader, loss_fn, epoch, flag_only_encoder)
         val_loss_epoch.append(epoch_val_loss)
         print('epoch: {} train loss: {} val loss: {}'.format(epoch,np.mean(train_loss),epoch_val_loss))
     return encoder, decoder, val_loss_epoch, train_loss_epoch
+
+
+def test_encoder(encoder, test_input, test_target):
+
+    MSE_test_linear_arr = torch.empty([test_input.shape[0]])
+
+    encoder.eval()
+    loss_fn = nn.MSELoss(reduction='mean')
+    with torch.no_grad():
+        """
+        for sequence in range(test_input.shape[0]):
+            x_out_test = torch.empty(1, test_input.shape[1])
+            y = test_input[sequence,...]
+            for t in range(test_input.shape[1]):
+                AE_input = y[t, :, :].reshape(1, 1, 24, 24) / 255
+                x_out_test[:, t] = encoder(AE_input)
+            MSE_test_linear_arr[sequence] = loss_fn(x_out_test, test_target[sequence, 0, :]).item()
+        """
+    test_input = test_input.reshape((test_input.shape[0]*test_input.shape[1], test_input.shape[2], test_input.shape[2]))
+    test_target = test_target.reshape((test_target.shape[0]*test_target.shape[1], test_target.shape[2]))
+    input_ae = torch.unsqueeze(test_input, 1)
+    output = encoder(input_ae/255)
+    print(f"output shape: {output.shape}")
+    MSE= loss_fn(output, test_target[:, 0:1])
+    MSE_log =  10 * torch.log10(MSE)
+    new_line='\n'
+    print(f"MSE TEST ENCODER-ONLY LINEAR-SCALE:{MSE.item()} {new_line}"
+          f"MSE TEST ENCODER-ONLY LOG-SCALE: {MSE_log} dB ")
+    #return MSE_test_linear_arr, MSE_linear_avg, MSE_log_avg
 
 def test_epoch(encoder, decoder, val_loader, loss_fn, epoch,  flag_only_encoder):
     encoder.eval()
@@ -52,9 +83,9 @@ def test_epoch(encoder, decoder, val_loader, loss_fn, epoch,  flag_only_encoder)
         val_loss = []
         for k,batch in enumerate(val_loader):
             image_batch=batch[0]
-            targets_batch=batch[1]
-            if (image_batch.shape[0] == 256): #taking only full batch
-                encoded_data = encoder(image_batch.reshape(256, 1, 24, 24) / 255)
+            targets_batch=batch[1].reshape(-1,1)
+            if True:#(image_batch.shape[0] == 256): #taking only full batch
+                encoded_data = encoder(image_batch.reshape(-1, 1, 24, 24) / 255)
                 if flag_only_encoder:
                     decoded_data = encoded_data
                     loss = loss_fn(decoded_data.float(), targets_batch.float())
@@ -64,7 +95,7 @@ def test_epoch(encoder, decoder, val_loader, loss_fn, epoch,  flag_only_encoder)
                         check_learning_process(image_batch.reshape(256, 1, 24, 24) / 255, decoded_data, epoch, 'val')
                     loss = loss_fn(decoded_data, targets_batch.reshape(256, 1, 24, 24) / 255)
                 val_loss.append(loss.detach().cpu().numpy())
-    return np.mean(val_loss)
+    return np.mean(val_loss).item()
 
 def train(model, H_data_train,H_data_valid, num_epochs, batch_size, learning_rate):
     torch.manual_seed(42)
@@ -102,6 +133,7 @@ def train(model, H_data_train,H_data_valid, num_epochs, batch_size, learning_rat
     outputs.append((state_batch, x_bottom_batch, img_batch, recon_batch))
     return outputs, epoch_list, Loss_train_list, Loss_valid_list, model
 
+#Fully connected autoencoder for visual synthetic data
 class Autoencoder(nn.Module):
     def __init__(self):
         super(Autoencoder, self).__init__()
@@ -205,6 +237,7 @@ def check_learning_process(img_batch,recon_batch,epoch, name):
     plt.title("reconstruct")
     fig.savefig('AE Process/{} Process at epoch {}.PNG'.format(name, epoch))
 
+#USED ONLY FOR SYNTETHIC VISUAL DATA
 def train_AE_FC():
     dataFolderName = 'Simulations/Synthetic_visual' + '/'
     dataFileName = 'y{}x{}_Ttrain{}_NE{}_NCV{}_NT{}_Ttest{}_Sigmoid.pt'.format(y_size,y_size, T,N_E,N_CV,N_T,T_test)
@@ -227,28 +260,28 @@ def train_AE_FC():
 
     visualize_similarity(outputs[0][2][22].squeeze().detach().numpy().reshape((y_size,y_size)), outputs[0][3][22].squeeze().detach().numpy().reshape((y_size,y_size)))
 
-def print_process(val_loss_list, train_loss_list , flag_only_encoder):
+def print_process(val_loss_list, train_loss_list , flag_only_encoder, path_to_save):
     if flag_only_encoder:
-        title='only encoder'
+        title='encoder only'
     else:
         title='Auto Encoder'
     fig = plt.figure(figsize=(10, 7))
     fig.add_subplot(1, 1, 1)
     plt.plot(train_loss_list, label='train')
     plt.plot(val_loss_list, label='val')
-    plt.title("Loss of Auto Encoder")
+    plt.title("Loss of " + title)
     plt.legend()
-    plt.savefig(r"./AE Process/Learning_process {} ".format(title))
+    plt.savefig(path_to_save + f"Learning_process {title}")
 
 def load_pendulum_npz(path):
     file = np.load(path)
     file_np = file.f.images
     return file_np
 
-def training_AE_conv(flag_only_encoder):
+def training_AE_conv1(flag_only_encoder):
     [train_input, train_target, cv_input, cv_target, test_input, test_target] = DataLoader_GPU(r'./Simulations/Pendulum/y24x24_Ttrain30_NE1000_NCV100_NT100_Ttest40_pendulum_train_encoder.pt')
 
-    #check_learning_process(imgs_np, noisy_imgs_np, 1, 1)
+
     imgs_np=train_input.cpu().detach().numpy()
     states_np=train_target.cpu().detach().numpy()
     train_list=[]
@@ -311,8 +344,79 @@ def training_AE_conv(flag_only_encoder):
     print_process(val_loss_epoch, train_loss_epoch, flag_only_encoder)
     return encoder, decoder, test_loader
 
+def training_AE_conv(flag_only_encoder, path_to_save):
+    if torch.cuda.is_available():
+        dev = torch.device("cuda:0")
+        torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    else:
+        dev = torch.device("cpu")
+
+    [train_input, train_target, cv_input, cv_target, test_input, test_target] = \
+        DataLoader_GPU(r'Datasets/Pendulum/pendulum_trans_std_0.001_obs_std_1e-05_train_5000&30_val_100&30_test_100&40.pt')
+    train_input = torch.reshape(train_input, (train_input.shape[0]*train_input.shape[1], 24, 24))
+    #train_target = torch.transpose(train_target, 1, 2)
+    train_target = torch.reshape(train_target, (train_target.shape[0] * train_target.shape[1], 2))
+    cv_input = torch.reshape(cv_input, (cv_input.shape[0] * cv_input.shape[1], 24, 24))
+    #cv_target = torch.transpose(cv_target, 1, 2)
+    cv_target = torch.reshape(cv_target, (cv_target.shape[0] * cv_target.shape[1], 2))
+    test_input = torch.reshape(test_input, (test_input.shape[0] * test_input.shape[1], 24, 24))
+   # test_target = torch.transpose(test_target, 1, 2)
+    test_target = torch.reshape(test_target, (test_target.shape[0] * test_target.shape[1], 2))
+
+    if flag_only_encoder:
+        train_target = train_target[:, 0]
+        cv_target = cv_target[:, 0]
+        test_target = test_target[:, 0]
+
+    dataset_train = torch.utils.data.TensorDataset(train_input, train_target)
+    dataset_val = torch.utils.data.TensorDataset(cv_input, cv_target)
+    dataset_test = torch.utils.data.TensorDataset(test_input, test_target)
+
+    lr = 1e-3
+    wd = 1e-4
+    torch.manual_seed(0)
+    d = 1 #learn only the angle
+    num_epochs=500
+    batch_size=256
+
+    train_loader = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size)
+    valid_loader = torch.utils.data.DataLoader(dataset_val, batch_size=batch_size)
+    test_loader = torch.utils.data.DataLoader(dataset_test, batch_size=batch_size)
+
+    loss_fn = torch.nn.MSELoss()
+    encoder = Encoder(encoded_space_dim=d).to(dev, non_blocking=True)
+    decoder = Decoder(encoded_space_dim=d).to(dev, non_blocking=True)
+    params_to_optimize = [{'params': encoder.parameters()},{'params': decoder.parameters()}]
+    optim = torch.optim.Adam(params_to_optimize, lr=lr, weight_decay=wd)
+    encoder, decoder, val_loss_epoch, train_loss_epoch = train_conv(encoder, decoder, train_loader, valid_loader,
+                                                                    loss_fn, optim, num_epochs, flag_only_encoder)
+    print_process(val_loss_epoch, train_loss_epoch, flag_only_encoder, path_to_save)
+    losses_and_hyperparameters = {'epochs': num_epochs, 'batch_size': batch_size, 'learning_rate': lr,
+                                  'weight_decay': wd, 'encoder_dim': d, 'training_loss': train_loss_epoch,
+                                  'validation_loss': val_loss_epoch}
+    with open(path_to_save+'losses_and_hyperparameters.txt', 'w') as file:
+        file.write(json.dumps(losses_and_hyperparameters))
+    return encoder, decoder, test_loader
+
 if __name__ == '__main__':
-    #train_AE_FC()
+    flag_only_encoder = 1
+    path_to_save = "./AE process/training_new_big_dataset/"
+    os.makedirs(path_to_save, True)
+
+    encoder, decoder, test_loader = training_AE_conv(flag_only_encoder=1, path_to_save=path_to_save)
+    os.makedirs("./saved_models/training_new_big_dataset/", True)
+    if flag_only_encoder:
+        torch.save(encoder.state_dict(), r"./saved_models/training_new_big_dataset/only_conv_encoder.pt")
+
+
+
+
+
+
+
+
+
+    """
     flag_only_encoder=True
     encoder, decoder, test_loader = training_AE_conv(flag_only_encoder)
     if flag_only_encoder:
@@ -328,7 +432,7 @@ if __name__ == '__main__':
 
     test_loss = test_epoch(encoder_loaded, decoder_loaded, test_loader, torch.nn.MSELoss(), 1, flag_only_encoder)
     print("Test loss is: {}".format(test_loss))
-
+    """
 
 
 

@@ -5,7 +5,10 @@ from filing_paths import path_model
 import sys
 
 sys.path.insert(1, path_model)
-from parameters import delta_t, delta_t_gen, variance
+sys.path.insert(1, "Simulations/Pendulum/model.py")
+
+#from parameters import delta_t, delta_t_gen, variance
+from model import delta_t, delta_t_gen, variance
 
 if torch.cuda.is_available():
     cuda0 = torch.device("cuda:0")  # you can continue going on here, like cuda:1 cuda:2....etc.
@@ -13,6 +16,7 @@ if torch.cuda.is_available():
 else:
     cuda0 = torch.device("cpu")
     print("Running on the CPU")
+
 
 
 class SystemModel:

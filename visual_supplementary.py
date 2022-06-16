@@ -9,6 +9,13 @@ x_size = 2
 y_size = 28
 decoaded_dimention = 5
 
+
+#############################################
+######## FILE FOR SYNTHETIC DATA GEN ########
+#############################################
+
+
+
 def H_visual_function_for_creating_data(x_sample):
     y_sample = torch.zeros(y_size, y_size)
     x_1 = x_sample[0]

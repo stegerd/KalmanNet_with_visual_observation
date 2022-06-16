@@ -3,7 +3,6 @@ torch.pi = torch.acos(torch.zeros(1)).item() * 2 # which is 3.1415927410125732
 from datetime import datetime # getting current time
 
 from EKF_test_visual import EKFTest
-from Linear_sysmdl_visual import SystemModel
 from Extended_sysmdl_visual import SystemModel as NL_SystemModel
 from KalmanNet_sysmdl import SystemModel as NewArch_SystemModel
 from Extended_data_visual import DataGen,DataLoader,DataLoader_GPU, getObs
@@ -11,8 +10,6 @@ from Extended_data_visual import N_E, N_CV, N_T, F, F_rotated, T, T_test, m1_0, 
 from visual_supplementary import y_size, check_changs
 from Pipeline_KF_visual import Pipeline_KF
 
-from KalmanNet_nn_LinearCase_OldArch_visual import KalmanNetNN
-from KalmanNet_nn_OldArch_visual import KalmanNetNN as Extended_KalmanNetNN
 from KalmanNet_nn_NewArch_visual import KalmanNetNN as KalmanNetNN_NewArch
 
 from main_AE import Autoencoder, Encoder
@@ -75,7 +72,7 @@ if pendulum_data_flag:
       Q_mod = q * q * torch.eye(NL_m)
       R_mod = r * r * torch.eye(NL_n)
       sys_model_KNet = NewArch_SystemModel(f, Q_mod, h, R_mod, NL_T, NL_T_test)
-      sys_model_KNet.InitSequence(NL_m1_0, NL_m2_0)     
+      sys_model_KNet.InitSequence(NL_m1_0, NL_m2_0)
 else:
    sys_model = SystemModel(F, q, H_matrix_for_visual, r, T, T_test)
    sys_model.InitSequence(m1_0, m2_0)

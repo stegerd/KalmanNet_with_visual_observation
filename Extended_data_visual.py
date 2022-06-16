@@ -51,18 +51,19 @@ H10 = torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
                     [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                     [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
 
+#  NEEDED ONLY FOR THE SYNTHETIC CASE
 H_matrix_for_visual=torch.tensor([[1.0, 0.0],
                                 [0.0, 1.0],
                                 [0.5, 0.5],
                                 [0.75, 0.25],
                                 [0.25, 0.75]])
-
+#  NEEDED ONLY FOR THE SYNTHETIC CASE
 b_for_visual=torch.tensor([[0.0],
                         [0.0],
                         [0.0],
                         [0.0],
                         [0.0]])
-
+#  NEEDED ONLY FOR THE SYNTHETIC CASE
 class H_fully_connected(nn.Module):
     def __init__(self, weights, bias):
         super(H_fully_connected, self).__init__()
@@ -194,18 +195,27 @@ def DecimateData(all_tensors, t_gen,t_mod, offset=0):
 
 
 def getObs(sequences, h, N_samples, n, T):
+    """
+
+    :param sequences: Input sequences
+    :param h: Observation matrix/function
+    :param N_samples: Number of samples (sequences) in sequences
+    :param n: Dimension of observations
+    :param T: Length of each sequence
+    :return:
+    """
     i = 0
     sequences_out = torch.empty(N_samples, n, T)
     for sequence in sequences:
         for t in range(sequence.size()[1]):
-            sequences_out[i,:,t] = h(sequence[:,t])
+            sequences_out[i, :, t] = h(sequence[:, t])
         i = i+1
 
     return sequences_out
 
 def Short_Traj_Split(data_target, data_input, T):
-    data_target = list(torch.split(data_target,T,2))
-    data_input = list(torch.split(data_input,T,2))
+    data_target = list(torch.split(data_target, T, 2))
+    data_input = list(torch.split(data_input, T, 2))
     data_target.pop()
     data_input.pop()
     data_target = torch.squeeze(torch.cat(list(data_target), dim=0))
